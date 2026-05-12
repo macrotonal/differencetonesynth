@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Difference Tone Synthesizer</title>
+<meta name="description" content="Psychoacoustic carrier pair synthesizer — perceived pitch generated through difference tones rather than direct oscillator mapping.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#05080a}
+
+:root{
+  --bg:#05080a;
+  --bg2:#0c1014;
+  --bg3:#131a1f;
+  --panel:#0f1519;
+  --border:#1e2d35;
+  --border2:#2a3d47;
+  --green:#2eff9a;
+  --green2:#1acc7a;
+  --cyan:#00d4ff;
+  --amber:#ffaa2e;
+  --red:#ff4d6a;
+  --muted:#4a6070;
+  --text:#c8dde8;
+  --text2:#7a9aaa;
+  --mono:'Space Mono',monospace;
+  --sans:'DM Sans',sans-serif;
+}
+
+body{
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:14px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-start;
+  min-height:100vh;
+  padding:20px 16px 40px;
+}
+
+.synth{
+  width:100%;
+  max-width:900px;
+  display:grid;
+  grid-template-rows:auto auto 1fr auto auto;
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+  background:var(--bg2);
+  min-height:580px;
+}
+
+/* Header */
+.hdr{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 20px 12px;
+  border-bottom:1px solid var(--border);
+  background:var(--bg2);
+}
+.hdr-title{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--green);text-transform:uppercase}
+.hdr-sub{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:3px;letter-spacing:.08em}
+.status-row{display:flex;align-items:center;gap:8px}
+.led{width:6px;height:6px;border-radius:50%;background:var(--muted);transition:background .1s,box-shadow .1s}
+.led.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+.status-txt{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:.06em}
+
+/* Controls */
+.controls{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:1px;
+  background:var(--border);
+  border-bottom:1px solid var(--border);
+}
+.ctrl-block{background:var(--panel);padding:12px 14px}
+.ctrl-label{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.ctrl-val{font-family:var(--mono);font-size:18px;color:var(--green);line-height:1;margin-bottom:6px}
+.ctrl-val span{font-size:10px;color:var(--text2);margin-left:3px}
+input[type=range]{
+  width:100%;height:3px;
+  -webkit-appearance:none;appearance:none;
+  background:var(--border2);border-radius:2px;
+  outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:12px;height:12px;border-radius:50%;
+  background:var(--green);cursor:pointer;
+  box-shadow:0 0 4px var(--green2);
+}
+input[type=range]::-moz-range-thumb{
+  width:12px;height:12px;border-radius:50%;
+  background:var(--green);cursor:pointer;border:none;
+}
+
+/* Mode selector */
+.mode-row{display:flex;gap:4px;flex-wrap:wrap}
+.mode-btn{
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;
+  padding:3px 7px;border-radius:3px;
+  border:1px solid var(--border2);
+  background:transparent;color:var(--muted);
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.mode-btn.active{background:var(--green);color:var(--bg);border-color:var(--green);font-weight:700}
+.mode-btn:hover:not(.active){border-color:var(--text2);color:var(--text)}
+
+/* Visualiser area */
+.vis-area{
+  display:grid;
+  grid-template-columns:1fr 200px;
+  gap:1px;
+  background:var(--border);
+  min-height:200px;
+}
+.spectrum-panel{background:var(--bg2);position:relative;overflow:hidden;min-height:200px}
+.spectrum-panel canvas{width:100%;height:100%;display:block}
+.spec-label{position:absolute;top:8px;left:12px;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.08em;pointer-events:none}
+
+.voices-panel{background:var(--panel);padding:12px;overflow-y:auto;max-height:280px}
+.voices-label{font-family:var(--mono);font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.voice-item{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.voice-item:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.voice-note{font-family:var(--mono);font-size:10px;color:var(--green);letter-spacing:.05em}
+.voice-freqs{font-family:var(--mono);font-size:8px;color:var(--muted);margin-top:3px;line-height:1.7}
+.voice-ratio{font-family:var(--mono);font-size:7px;color:var(--cyan);margin-top:2px}
+.no-voices{font-family:var(--mono);font-size:8px;color:var(--muted);text-align:center;padding:20px 0;letter-spacing:.06em}
+
+/* Mode info bar */
+.mode-info{
+  padding:6px 14px;
+  background:var(--bg);
+  border-top:1px solid var(--border);
+  display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+}
+.mode-info-item{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:.05em}
+.mode-info-item b{color:var(--cyan)}
+
+/* Keyboard */
+.keyboard{
+  position:relative;
+  height:100px;
+  background:var(--bg2);
+  border-top:1px solid var(--border);
+  user-select:none;
+  overflow:hidden;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding-bottom:0;
+}
+.keyboard-inner{
+  position:relative;
+  display:flex;
+  height:76px;
+  padding:0 10px;
+  margin-bottom:10px;
+}
+.wkey,.bkey{cursor:pointer;border-radius:0 0 4px 4px;transition:background .05s}
+.wkey{
+  width:34px;height:76px;
+  background:#c8dde8;
+  border:1px solid #8aabb8;
+  margin:0 1px;
+  position:relative;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:6px;
+}
+.wkey .klab{font-family:var(--mono);font-size:7px;color:#8aabb8;letter-spacing:.05em}
+.wkey:hover{background:#e8f4f8}
+.wkey.active{background:var(--green);border-color:var(--green2)}
+.bkey-wrap{position:absolute;z-index:2;display:flex;justify-content:center}
+.bkey{width:22px;height:48px;background:#1a2830;border:1px solid #2a3d47}
+.bkey:hover{background:#2a3d47}
+.bkey.active{background:var(--amber);border-color:var(--amber)}
+.kb-hint{
+  position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:7px;color:var(--muted);
+  letter-spacing:.06em;pointer-events:none;white-space:nowrap;
+}
+
+/* Legend */
+.legend{
+  margin-top:16px;
+  display:flex;gap:20px;justify-content:center;flex-wrap:wrap;
+}
+.legend-item{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:9px;color:var(--muted)}
+.legend-dot{width:8px;height:2px;border-radius:1px}
+
+@media(max-width:600px){
+  .controls{grid-template-columns:1fr 1fr}
+  .vis-area{grid-template-columns:1fr}
+  .voices-panel{display:none}
+  .wkey{width:26px}
+}
+</style>
+</head>
+<body>
+
+<div class="synth" id="synth">
+
+  <div class="hdr">
+    <div>
+      <div class="hdr-title">Difference Tone Synthesizer</div>
+      <div class="hdr-sub">Psychoacoustic carrier pair engine &middot; f2 &minus; f1 = target pitch</div>
+    </div>
+    <div class="status-row">
+      <div class="led" id="audio-led"></div>
+      <div class="status-txt" id="audio-status">CLICK TO INIT</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-block">
+      <div class="ctrl-label">Carrier Mode</div>
+      <div class="mode-row" id="mode-btns">
+        <button class="mode-btn active" data-mode="harmonic">Harmonic</button>
+        <button class="mode-btn" data-mode="ji">Just Int</button>
+        <button class="mode-btn" data-mode="golden">Golden</button>
+        <button class="mode-btn" data-mode="adaptive">Adaptive</button>
+      </div>
+    </div>
+    <div class="ctrl-block">
+      <div class="ctrl-label">N Multiplier</div>
+      <div class="ctrl-val" id="n-val">2 <span>&times; f</span></div>
+      <input type="range" id="n-slider" min="1" max="12" step="0.1" value="2">
+    </div>
+    <div class="ctrl-block">
+      <div class="ctrl-label">Carrier Blend</div>
+      <div class="ctrl-val" id="blend-val">50 <span>%</span></div>
+      <input type="range" id="blend-slider" min="0" max="100" step="1" value="50">
+    </div>
+    <div class="ctrl-block">
+      <div class="ctrl-label">Volume</div>
+      <div class="ctrl-val" id="vol-val">70 <span>%</span></div>
+      <input type="range" id="vol-slider" min="0" max="100" step="1" value="70">
+    </div>
+  </div>
+
+  <div class="vis-area">
+    <div class="spectrum-panel">
+      <div class="spec-label">SPECTRUM · 0 – 4kHz</div>
+      <canvas id="spec-canvas"></canvas>
+    </div>
+    <div class="voices-panel">
+      <div class="voices-label">Active Voices</div>
+      <div id="voice-list"><div class="no-voices">No active voices</div></div>
+    </div>
+  </div>
+
+  <div class="mode-info" id="mode-info">
+    <div class="mode-info-item">Mode: <b id="mi-mode">Harmonic</b></div>
+    <div class="mode-info-item">f1 = <b id="mi-f1">N&middot;f</b></div>
+    <div class="mode-info-item">f2 = <b id="mi-f2">(N+1)&middot;f</b></div>
+    <div class="mode-info-item">Interval: <b id="mi-int">N:(N+1)</b></div>
+  </div>
+
+  <div class="keyboard">
+    <div class="keyboard-inner" id="keyboard"></div>
+    <div class="kb-hint">MOUSE · KEYBOARD: A W S E D F T G Y H U J K</div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div>f1 carrier</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ffaa2e"></div>f2 carrier</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2eff9a"></div>&Delta; target pitch</div>
+</div>
+
+<script>
+let ctx = null;
+let masterGain = null;
+const voices = new Map();
+let mode = 'harmonic';
+let nMult = 2;
+let blend = 0.5;
+let vol = 0.7;
+let analyser = null;
+
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const KEY_MAP = {
+  'a':60,'w':61,'s':62,'e':63,'d':64,'f':65,'t':66,'g':67,'y':68,'h':69,'u':70,'j':71,'k':72
+};
+
+function midiToHz(midi){ return 261.63 * Math.pow(2, (midi - 60) / 12); }
+function midiName(midi){ return NOTE_NAMES[midi % 12] + (Math.floor(midi / 12) - 1); }
+function gcd(a, b){ return b < 0.001 ? a : gcd(b, a % b); }
+function ratioStr(a, b){
+  let g = gcd(a, b);
+  let ra = Math.round(a/g*10)/10, rb = Math.round(b/g*10)/10;
+  if(ra > 20 || rb > 20) return Math.round(a) + ':' + Math.round(b);
+  return ra + ':' + rb;
+}
+
+function getCarriers(f, m, n){
+  switch(m){
+    case 'harmonic':
+      return { f1: n * f, f2: (n + 1) * f };
+
+    case 'ji': {
+      const jiRatios = [[3,2],[4,3],[5,4],[6,5],[7,6],[8,7],[9,8],[10,9],[5,3],[7,4]];
+      const idx = Math.min(Math.floor(n - 1), jiRatios.length - 1);
+      const nextIdx = Math.min(idx + 1, jiRatios.length - 1);
+      const t = (n - 1) - Math.floor(n - 1);
+      const r1 = jiRatios[idx][0] / jiRatios[idx][1];
+      const r2 = jiRatios[nextIdx][0] / jiRatios[nextIdx][1];
+      const r = r1 * (1 - t) + r2 * t;
+      const f1 = f / (r - 1);
+      return { f1, f2: f1 + f };
+    }
+
+    case 'golden': {
+      const phi = 1.6180339887;
+      const f1 = n * phi * f;
+      return { f1, f2: f1 + f };
+    }
+
+    case 'adaptive': {
+      let bestN = n, bestScore = Infinity;
+      for(let trial = n - 0.5; trial <= n + 0.5; trial += 0.05){
+        let score = 0;
+        voices.forEach(v => {
+          const df = Math.abs(trial * f - v.f1);
+          const df2 = Math.abs((trial + 1) * f - v.f2);
+          if(df > 0.5 && df < 25) score += (25 - df);
+          if(df2 > 0.5 && df2 < 25) score += (25 - df2);
+        });
+        if(score < bestScore){ bestScore = score; bestN = trial; }
+      }
+      return { f1: bestN * f, f2: (bestN + 1) * f };
+    }
+
+    default:
+      return { f1: n * f, f2: (n + 1) * f };
+  }
+}
+
+function initAudio(){
+  if(ctx) return;
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100, latencyHint: 'interactive' });
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.82;
+  masterGain = ctx.createGain();
+  masterGain.gain.value = vol * 0.3;
+  masterGain.connect(analyser);
+  analyser.connect(ctx.destination);
+  document.getElementById('audio-led').classList.add('on');
+  document.getElementById('audio-status').textContent = 'AUDIO READY';
+  startVis();
+}
+
+function noteOn(midi){
+  if(!ctx) initAudio();
+  if(ctx.state === 'suspended') ctx.resume();
+  if(voices.has(midi)) return;
+
+  const f = midiToHz(midi);
+  const { f1, f2 } = getCarriers(f, mode, nMult);
+
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const g1 = ctx.createGain();
+  const g2 = ctx.createGain();
+  const vg = ctx.createGain();
+
+  osc1.type = 'sine';
+  osc2.type = 'sine';
+  osc1.frequency.setValueAtTime(f1, ctx.currentTime);
+  osc2.frequency.setValueAtTime(f2, ctx.currentTime);
+  g1.gain.setValueAtTime(blend, ctx.currentTime);
+  g2.gain.setValueAtTime(1 - blend, ctx.currentTime);
+  vg.gain.setValueAtTime(0, ctx.currentTime);
+  vg.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.012);
+
+  osc1.connect(g1); g1.connect(vg);
+  osc2.connect(g2); g2.connect(vg);
+  vg.connect(masterGain);
+
+  osc1.start(); osc2.start();
+
+  voices.set(midi, { osc1, osc2, g1, g2, vg, f, f1, f2, midi });
+  updateVoiceUI();
+  setKeyActive(midi, true);
+}
+
+function noteOff(midi){
+  if(!voices.has(midi)) return;
+  const v = voices.get(midi);
+  const t = ctx.currentTime;
+  v.vg.gain.setValueAtTime(v.vg.gain.value, t);
+  v.vg.gain.linearRampToValueAtTime(0, t + 0.08);
+  setTimeout(() => {
+    try { v.osc1.stop(); v.osc2.stop(); } catch(e){}
+    try { v.vg.disconnect(); } catch(e){}
+  }, 120);
+  voices.delete(midi);
+  updateVoiceUI();
+  setKeyActive(midi, false);
+}
+
+function updateAllVoiceFreqs(){
+  voices.forEach((v) => {
+    const { f1, f2 } = getCarriers(v.f, mode, nMult);
+    v.f1 = f1; v.f2 = f2;
+    const t = ctx.currentTime;
+    v.osc1.frequency.linearRampToValueAtTime(f1, t + 0.05);
+    v.osc2.frequency.linearRampToValueAtTime(f2, t + 0.05);
+  });
+  updateVoiceUI();
+  updateModeInfo();
+}
+
+function updateVoiceUI(){
+  const list = document.getElementById('voice-list');
+  if(voices.size === 0){
+    list.innerHTML = '<div class="no-voices">No active voices</div>';
+    return;
+  }
+  let html = '';
+  voices.forEach(v => {
+    const name = midiName(v.midi);
+    const ratio = ratioStr(v.f1, v.f2);
+    const cents = Math.round(1200 * Math.log2(v.f2 / v.f1));
+    html += `<div class="voice-item">
+      <div class="voice-note">${name} &middot; ${Math.round(v.f)}Hz</div>
+      <div class="voice-freqs">
+        f1: ${v.f1.toFixed(1)}Hz<br>
+        f2: ${v.f2.toFixed(1)}Hz<br>
+        &Delta;: ${(v.f2 - v.f1).toFixed(1)}Hz
+      </div>
+      <div class="voice-ratio">carriers: ${ratio} &middot; ${cents}&cent;</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function updateModeInfo(){
+  const modeNames = { harmonic:'Harmonic N-series', ji:'Just Intonation', golden:'Golden Ratio', adaptive:'Beat-Adaptive' };
+  document.getElementById('mi-mode').textContent = modeNames[mode] || mode;
+  if(mode === 'harmonic'){
+    const n = Math.round(nMult * 10) / 10;
+    document.getElementById('mi-f1').textContent = n + '\u00B7f';
+    document.getElementById('mi-f2').textContent = (Math.round((n+1)*10)/10) + '\u00B7f';
+    document.getElementById('mi-int').textContent = n + ':' + (Math.round((n+1)*10)/10);
+  } else if(mode === 'ji'){
+    const jiNames = ['5th','4th','Maj3','Min3','Nat7','Nat2','Maj2','Min2','Min6','Dom7'];
+    const idx = Math.min(Math.floor(nMult - 1), jiNames.length - 1);
+    document.getElementById('mi-f1').textContent = 'f/(r\u22121)';
+    document.getElementById('mi-f2').textContent = 'f1+f';
+    document.getElementById('mi-int').textContent = jiNames[idx] || 'JI';
+  } else if(mode === 'golden'){
+    document.getElementById('mi-f1').textContent = Math.round(nMult*10)/10 + '\u00B7\u03C6\u00B7f';
+    document.getElementById('mi-f2').textContent = 'f1+f';
+    document.getElementById('mi-int').textContent = '1.618\u2026';
+  } else {
+    document.getElementById('mi-f1').textContent = 'beat-aware';
+    document.getElementById('mi-f2').textContent = 'f1+f';
+    document.getElementById('mi-int').textContent = 'adaptive';
+  }
+}
+
+// Keyboard
+function buildKeyboard(){
+  const kb = document.getElementById('keyboard');
+  const startMidi = 48;
+  const whites = [0,2,4,5,7,9,11,12,14,16,17,19,21,23,24,26,28];
+  const bKeyPositions = [
+    {semi:1,pos:0},{semi:3,pos:1},{semi:6,pos:3},{semi:8,pos:4},{semi:10,pos:5},
+    {semi:13,pos:7},{semi:15,pos:8},{semi:18,pos:10},{semi:20,pos:11},{semi:22,pos:12},
+    {semi:25,pos:14},{semi:27,pos:15}
+  ];
+
+  whites.forEach((semitone) => {
+    const midi = startMidi + semitone;
+    const btn = document.createElement('div');
+    btn.className = 'wkey';
+    btn.dataset.midi = midi;
+    const note = NOTE_NAMES[midi % 12];
+    if(note === 'C') btn.innerHTML = `<span class="klab">${note}${Math.floor(midi/12)-1}</span>`;
+    kb.appendChild(btn);
+  });
+
+  bKeyPositions.forEach(({semi, pos}) => {
+    const midi = startMidi + semi;
+    const bwrap = document.createElement('div');
+    bwrap.className = 'bkey-wrap';
+    bwrap.style.cssText = `left:${pos * 36 + 24}px;position:absolute;top:0`;
+    const btn = document.createElement('div');
+    btn.className = 'bkey';
+    btn.dataset.midi = midi;
+    bwrap.appendChild(btn);
+    kb.appendChild(bwrap);
+  });
+
+  kb.addEventListener('mousedown', e => {
+    const key = e.target.closest('[data-midi]');
+    if(key){ initAudio(); noteOn(+key.dataset.midi); }
+  });
+  kb.addEventListener('mouseover', e => {
+    const key = e.target.closest('[data-midi]');
+    if(key && e.buttons === 1) noteOn(+key.dataset.midi);
+  });
+  document.addEventListener('mouseup', () => {
+    voices.forEach((_, midi) => noteOff(midi));
+  });
+}
+
+function setKeyActive(midi, on){
+  document.querySelectorAll(`[data-midi="${midi}"]`).forEach(el => {
+    on ? el.classList.add('active') : el.classList.remove('active');
+  });
+}
+
+const heldKeys = new Set();
+document.addEventListener('keydown', e => {
+  if(e.repeat || e.metaKey || e.ctrlKey) return;
+  const k = e.key.toLowerCase();
+  if(KEY_MAP[k] && !heldKeys.has(k)){
+    heldKeys.add(k);
+    initAudio();
+    noteOn(KEY_MAP[k]);
+  }
+});
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if(KEY_MAP[k]){ heldKeys.delete(k); noteOff(KEY_MAP[k]); }
+});
+
+// Mode buttons
+document.getElementById('mode-btns').addEventListener('click', e => {
+  const btn = e.target.closest('.mode-btn');
+  if(!btn) return;
+  mode = btn.dataset.mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateAllVoiceFreqs();
+});
+
+// Sliders
+document.getElementById('n-slider').addEventListener('input', e => {
+  nMult = +e.target.value;
+  document.getElementById('n-val').innerHTML = Math.round(nMult*10)/10 + ' <span>&times; f</span>';
+  updateAllVoiceFreqs();
+});
+document.getElementById('blend-slider').addEventListener('input', e => {
+  blend = +e.target.value / 100;
+  document.getElementById('blend-val').innerHTML = e.target.value + ' <span>%</span>';
+  if(!ctx) return;
+  voices.forEach(v => {
+    v.g1.gain.linearRampToValueAtTime(blend, ctx.currentTime + 0.05);
+    v.g2.gain.linearRampToValueAtTime(1 - blend, ctx.currentTime + 0.05);
+  });
+});
+document.getElementById('vol-slider').addEventListener('input', e => {
+  vol = +e.target.value / 100;
+  document.getElementById('vol-val').innerHTML = e.target.value + ' <span>%</span>';
+  if(masterGain) masterGain.gain.linearRampToValueAtTime(vol * 0.3, ctx.currentTime + 0.05);
+});
+
+// Spectrum visualiser
+function startVis(){
+  const canvas = document.getElementById('spec-canvas');
+  const panel = canvas.parentElement;
+
+  function resize(){
+    canvas.width = panel.clientWidth;
+    canvas.height = panel.clientHeight;
+  }
+  resize();
+  new ResizeObserver(resize).observe(panel);
+
+  const dv = new Uint8Array(analyser.frequencyBinCount);
+
+  function draw(){
+    requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(dv);
+    const cw = canvas.width, ch = canvas.height;
+    const c = canvas.getContext('2d');
+
+    c.fillStyle = '#05080a';
+    c.fillRect(0, 0, cw, ch);
+
+    // Grid
+    c.strokeStyle = '#1e2d35';
+    c.lineWidth = 0.5;
+    for(let i = 0; i < 5; i++){
+      const y = ch * (i + 1) / 6;
+      c.beginPath(); c.moveTo(0, y); c.lineTo(cw, y); c.stroke();
+    }
+
+    // Bars up to 4kHz
+    const nyq = ctx.sampleRate / 2;
+    const maxFreq = 4000;
+    const maxBin = Math.floor(maxFreq / nyq * dv.length);
+    const bw = cw / maxBin;
+
+    for(let i = 1; i < maxBin; i++){
+      const v = dv[i] / 255;
+      if(v < 0.01) continue;
+      const x = (i / maxBin) * cw;
+      const h = v * ch * 0.88;
+      const hue = 160 + v * 60;
+      c.fillStyle = `hsla(${hue},80%,${45 + v*25}%,${0.5 + v*0.5})`;
+      c.fillRect(x - bw/2, ch - h, Math.max(bw - 1, 1), h);
+    }
+
+    // Voice markers
+    voices.forEach(v => {
+      [[v.f1,'#00d4ff','f1'],[v.f2,'#ffaa2e','f2'],[v.f,'#2eff9a','\u0394']].forEach(([freq, col, lbl]) => {
+        if(freq > maxFreq) return;
+        const x = (freq / maxFreq) * cw;
+        c.strokeStyle = col;
+        c.lineWidth = 1;
+        c.setLineDash([3, 3]);
+        c.beginPath(); c.moveTo(x, 0); c.lineTo(x, ch - 12); c.stroke();
+        c.setLineDash([]);
+        c.fillStyle = col;
+        c.font = '8px Space Mono,monospace';
+        c.fillText(lbl, x + 2, 14);
+      });
+    });
+  }
+  draw();
+}
+
+buildKeyboard();
+updateModeInfo();
+</script>
+</body>
+</html>
